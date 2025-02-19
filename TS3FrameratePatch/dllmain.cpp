@@ -19,7 +19,7 @@
 #include <iostream>
 #include <algorithm>
 #include <thread>
-#include <atomic>ы
+#include <atomic>
 #include <MinHook.h>
 
 #pragma comment(lib, "D3D Hook x86.lib")
