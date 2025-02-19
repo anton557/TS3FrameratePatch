@@ -1,4 +1,13 @@
-﻿#include "pch.h"
+﻿// Original author: LazyDuchess
+//▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+// Code improvement (Multithreading, updating code and libraries, C++17 Standard, Visual Studio 2022)
+// By anton557 (Stone)
+// Link: https://vk.com/anton_paskevich
+// Link 2: https://modthesims.info/member.php?u=10350339
+// Link 3: https://thesims.cc/members/anton557.484107/
+//▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+
+#include "pch.h"
 #include <string>
 #include <Psapi.h>
 #include <fstream>
