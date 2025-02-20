@@ -88,10 +88,9 @@ char* ScanInternal(const char* pattern, int patternLen, const char* begin, intpt
 //                              ОБЪЯВЛЕНИЯ ДЛЯ D3D ХУКОВ
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 typedef long(__stdcall* tPresent)(LPDIRECT3DDEVICE9, RECT*, RECT*, HWND, RGNDATA*);
-tPresent oD3D9Present = NULL;
+tPresent oD3D9Present = nullptr;
 
 long __stdcall hkD3D9Present(LPDIRECT3DDEVICE9 pDevice, RECT* pSourceRect, RECT* pDestRect, HWND hDestWindowOverride, RGNDATA* pDirtyRegion) {
-    long present = oD3D9Present(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
     if (FPSTarget > 0) {
         auto now = std::chrono::steady_clock::now();
         auto frameTime = std::chrono::duration_cast<std::chrono::nanoseconds>(now - lastFrameTime).count();
@@ -100,7 +99,7 @@ long __stdcall hkD3D9Present(LPDIRECT3DDEVICE9 pDevice, RECT* pSourceRect, RECT*
         }
         lastFrameTime = now;
     }
-    return present;
+    return oD3D9Present(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
 }
 
 //▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
@@ -158,13 +157,13 @@ void FPSControlThread() {
 //                              ОСНОВНОЙ КОД
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 DWORD WINAPI MainThread(LPVOID param) {
-    // Проверка, что процесс — TS3.exe или Sims3Launcher.exe
+    // Проверка, что процесс — TS3.exe
     wchar_t modName[MAX_PATH];
     GetModuleFileNameW(NULL, modName, MAX_PATH);
     std::wstring exePath(modName);
     std::transform(exePath.begin(), exePath.end(), exePath.begin(), towlower);
 
-    if (exePath.find(L"ts3") == std::wstring::npos && exePath.find(L"sims3launcher") == std::wstring::npos) {
+    if (exePath.find(L"ts3") == std::wstring::npos) {
         FreeLibraryAndExitThread((HMODULE)param, 0);
         return 0;
     }
@@ -203,10 +202,9 @@ DWORD WINAPI MainThread(LPVOID param) {
         MessageBoxW(NULL, L"Debug mode: Patching Game!", L"TS3Patch", MB_OK | MB_ICONINFORMATION);
     }
 
-    if (delay > 0) Sleep(delay);
-
-    // Инициализация
-    modBase = (char*)GetModuleHandleA(NULL);
+    if (delay > 0) {
+        Sleep(delay);
+    }
 
     // Инициализация D3D хуков
     if (FPSTarget > 0) {
@@ -214,31 +212,8 @@ DWORD WINAPI MainThread(LPVOID param) {
             methodesHook(17, hkD3D9Present, (LPVOID*)&oD3D9Present);
             lastFrameTime = std::chrono::steady_clock::now();
         }
-    }
-
-    std::thread memoryThread(MemoryScanThread);
-    std::thread fpsThread(FPSControlThread);
-
-    if (borderless) {
-        HWND hWnd = nullptr;
-        while (!hWnd && !bExit) {
-            EnumWindows([](HWND hwnd, LPARAM pid) -> BOOL {
-                DWORD windowPid;
-                GetWindowThreadProcessId(hwnd, &windowPid);
-                if (windowPid == (DWORD)pid && IsWindowVisible(hwnd)) {
-                    *(HWND*)&pid = hwnd;
-                    return FALSE;
-                }
-                return TRUE;
-                }, (LPARAM)GetCurrentProcessId());
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-
-        if (hWnd) {
-            LONG_PTR style = GetWindowLongPtrW(hWnd, GWL_STYLE);
-            style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU);
-            SetWindowLongPtrW(hWnd, GWL_STYLE, style);
-            SetWindowPos(hWnd, HWND_TOP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), SWP_FRAMECHANGED);
+        else if (debug) {
+            MessageBoxW(NULL, L"Failed to initialize D3D hooks!", L"TS3Patch", MB_OK | MB_ICONERROR);
         }
     }
 
@@ -247,9 +222,6 @@ DWORD WINAPI MainThread(LPVOID param) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // Очистка
-    memoryThread.join();
-    fpsThread.join();
     FreeLibraryAndExitThread((HMODULE)param, 0);
     return 0;
 }
