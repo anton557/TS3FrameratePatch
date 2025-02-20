@@ -14,16 +14,15 @@
 #include <vector>
 #include <sstream>
 #include <d3d9.h>
+#include "D3Dhook.h"
 #include <math.h>
 #include <chrono>
 #include <iostream>
 #include <algorithm>
 #include <thread>
 #include <atomic>
-#include <MinHook.h>
 
 #pragma comment(lib, "D3D Hook x86.lib")
-#pragma comment(lib, "MinHook.x86.lib")
 
 //▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 //                              КОНСТАНТЫ И ПЕРЕМЕННЫЕ
@@ -86,14 +85,34 @@ char* ScanInternal(const char* pattern, int patternLen, const char* begin, intpt
 }
 
 //▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+//                              ОБЪЯВЛЕНИЯ ДЛЯ D3D ХУКОВ
+//▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+typedef long(__stdcall* tPresent)(LPDIRECT3DDEVICE9, RECT*, RECT*, HWND, RGNDATA*);
+tPresent oD3D9Present = NULL;
+
+long __stdcall hkD3D9Present(LPDIRECT3DDEVICE9 pDevice, RECT* pSourceRect, RECT* pDestRect, HWND hDestWindowOverride, RGNDATA* pDirtyRegion) {
+    long present = oD3D9Present(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
+    if (FPSTarget > 0) {
+        auto now = std::chrono::steady_clock::now();
+        auto frameTime = std::chrono::duration_cast<std::chrono::nanoseconds>(now - lastFrameTime).count();
+        if (frameTime < FPSTarget) {
+            std::this_thread::sleep_for(std::chrono::nanoseconds(FPSTarget - frameTime));
+        }
+        lastFrameTime = now;
+    }
+    return present;
+}
+
+//▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 //                              МНОГОПОТОЧНЫЕ СИСТЕМЫ
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 void MemoryScanThread() {
     MODULEINFO modInfo;
     GetModuleInformation(GetCurrentProcess(), (HMODULE)modBase, &modInfo, sizeof(MODULEINFO));
 
-    while (!bExit) {
-        DWORD addr = (DWORD)ScanInternal(lookup, sizeof(lookup), modBase, modInfo.SizeOfImage);
+    DWORD addr = 0;
+    while (!bExit && !addr) {
+        addr = (DWORD)ScanInternal(lookup, sizeof(lookup), modBase, modInfo.SizeOfImage);
         if (!addr) addr = (DWORD)ScanInternal(lookup2, sizeof(lookup2), modBase, modInfo.SizeOfImage);
 
         if (addr) {
@@ -180,6 +199,15 @@ DWORD WINAPI MainThread(LPVOID param) {
 
     // Инициализация
     modBase = (char*)GetModuleHandleA(NULL);
+
+    // Инициализация D3D хуков
+    if (FPSTarget > 0) {
+        if (init_D3D()) {
+            methodesHook(17, hkD3D9Present, (LPVOID*)&oD3D9Present);
+            lastFrameTime = std::chrono::steady_clock::now();
+        }
+    }
+
     std::thread memoryThread(MemoryScanThread);
     std::thread fpsThread(FPSControlThread);
 
