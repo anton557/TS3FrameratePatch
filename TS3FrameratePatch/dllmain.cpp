@@ -158,15 +158,19 @@ void FPSControlThread() {
 //                              ОСНОВНОЙ КОД
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 DWORD WINAPI MainThread(LPVOID param) {
-    // Загрузка конфигурации
-    std::wstring cmdLine = GetCommandLine();
-    std::transform(cmdLine.begin(), cmdLine.end(), cmdLine.begin(), towlower);
-
+    // Проверка, что процесс — TS3.exe или Sims3Launcher.exe
     wchar_t modName[MAX_PATH];
     GetModuleFileNameW(NULL, modName, MAX_PATH);
-    std::wstring configPath(modName);
-    size_t pos = configPath.find_last_of(L"\\/");
-    configPath = configPath.substr(0, pos) + L"\\TS3Patch.txt";
+    std::wstring exePath(modName);
+    std::transform(exePath.begin(), exePath.end(), exePath.begin(), towlower);
+
+    if (exePath.find(L"ts3") == std::wstring::npos && exePath.find(L"sims3launcher") == std::wstring::npos) {
+        FreeLibraryAndExitThread((HMODULE)param, 0);
+        return 0;
+    }
+
+    // Загрузка конфигурации
+    std::wstring configPath = exePath.substr(0, exePath.find_last_of(L"\\/")) + L"\\TS3Patch.txt";
 
     bool debug = false;
     int delay = 0;
@@ -193,6 +197,10 @@ DWORD WINAPI MainThread(LPVOID param) {
             }
         }
         file.close();
+    }
+
+    if (debug) {
+        MessageBoxW(NULL, L"Debug mode: Patching Game!", L"TS3Patch", MB_OK | MB_ICONINFORMATION);
     }
 
     if (delay > 0) Sleep(delay);
