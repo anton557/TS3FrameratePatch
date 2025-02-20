@@ -84,7 +84,7 @@ char* ScanInternal(const char* pattern, int patternLen, const char* begin, intpt
     return match;
 }
 
-// ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+//▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 //                              ОБЪЯВЛЕНИЯ ДЛЯ D3D ХУКОВ
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 typedef long(__stdcall* tPresent)(LPDIRECT3DDEVICE9, RECT*, RECT*, HWND, RGNDATA*);
@@ -95,8 +95,9 @@ long __stdcall hkD3D9Present(LPDIRECT3DDEVICE9 pDevice, RECT* pSourceRect, RECT*
         auto now = std::chrono::steady_clock::now();
         auto frameTime = std::chrono::duration_cast<std::chrono::nanoseconds>(now - lastFrameTime).count();
 
-        if (frameTime < FPSTarget) {
-            auto targetTime = lastFrameTime + std::chrono::nanoseconds(FPSTarget);
+        // Учитываем двойную буферизацию (делим на 2)
+        if (frameTime < FPSTarget * 2) {
+            auto targetTime = lastFrameTime + std::chrono::nanoseconds(FPSTarget * 2);
             while (std::chrono::steady_clock::now() < targetTime) {
                 std::this_thread::yield();
             }
