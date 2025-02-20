@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <thread>
 #include <atomic>
+#include <windows.h>.
 
 #pragma comment(lib, "D3D Hook x86.lib")
 
@@ -108,8 +109,58 @@ long __stdcall hkD3D9Present(LPDIRECT3DDEVICE9 pDevice, RECT* pSourceRect, RECT*
 }
 
 //▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+//                              BORDERLESS РЕЖИМ (КАК В СТАРОМ КОДЕ)
+//▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+HWND g_HWND = NULL;
+
+BOOL CALLBACK EnumWindowsProcMy(HWND hwnd, LPARAM lParam) {
+    DWORD lpdwProcessId;
+    GetWindowThreadProcessId(hwnd, &lpdwProcessId);
+    if (IsWindowVisible(hwnd) && lpdwProcessId == lParam) {
+        g_HWND = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+void MakeBorderless() {
+    while (g_HWND == NULL && !bExit) {
+        EnumWindows(EnumWindowsProcMy, GetCurrentProcessId());
+        Sleep(100);
+    }
+
+    if (g_HWND) {
+        // Убираем стандартные стили окна
+        LONG lStyle = GetWindowLong(g_HWND, GWL_STYLE);
+        lStyle &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZE | WS_MAXIMIZE | WS_SYSMENU);
+        SetWindowLong(g_HWND, GWL_STYLE, lStyle);
+
+        // Убираем расширенные стили
+        LONG lExStyle = GetWindowLong(g_HWND, GWL_EXSTYLE);
+        lExStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+        SetWindowLong(g_HWND, GWL_EXSTYLE, lExStyle);
+
+        // Устанавливаем окно на весь экран
+        SetWindowPos(g_HWND, HWND_TOP, 0, 0,
+            GetSystemMetrics(SM_CXSCREEN),
+            GetSystemMetrics(SM_CYSCREEN),
+            SWP_FRAMECHANGED | SWP_SHOWWINDOW
+        );
+    }
+}
+
+DWORD WINAPI BorderlessThread(LPVOID param) {
+    while (!bExit) {
+        MakeBorderless();
+        Sleep(500); // Обновляем каждые 500 мс
+    }
+    return 0;
+}
+
+//▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 //                              МНОГОПОТОЧНЫЕ СИСТЕМЫ
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
 void MemoryScanThread() {
     MODULEINFO modInfo;
     GetModuleInformation(GetCurrentProcess(), (HMODULE)modBase, &modInfo, sizeof(MODULEINFO));
@@ -210,26 +261,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 
     // Borderless режим
     if (borderless) {
-        HWND hWnd = nullptr;
-        while (!hWnd && !bExit) {
-            EnumWindows([](HWND hwnd, LPARAM pid) -> BOOL {
-                DWORD windowPid;
-                GetWindowThreadProcessId(hwnd, &windowPid);
-                if (windowPid == (DWORD)pid && IsWindowVisible(hwnd)) {
-                    *(HWND*)&pid = hwnd;
-                    return FALSE;
-                }
-                return TRUE;
-                }, (LPARAM)GetCurrentProcessId());
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-
-        if (hWnd) {
-            LONG_PTR style = GetWindowLongPtrW(hWnd, GWL_STYLE);
-            style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU);
-            SetWindowLongPtrW(hWnd, GWL_STYLE, style);
-            SetWindowPos(hWnd, HWND_TOP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), SWP_FRAMECHANGED);
-        }
+        CreateThread(0, 0, BorderlessThread, param, 0, 0);
     }
 
     // Основной цикл
