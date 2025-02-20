@@ -35,9 +35,9 @@ char lookup2[] = { 0xC3, 0x44, 0x24, 0x04, 0x8B, 0x08, 0x6A, 0x01, 0x51, 0xFF };
 
 char* modBase;
 std::atomic<bool> bExit{ false };
-std::atomic<long long> FPSTarget{ 0 };
-std::chrono::steady_clock::time_point lastFrameTime;
-int tps = 0; // Объявление переменной tps
+std::atomic<long long> FPSTarget{ 0 }; // Объявлено здесь
+std::chrono::steady_clock::time_point lastFrameTime; // Объявлено здесь
+int tps = 0;
 
 //▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 //                              ФУНКЦИИ ДЛЯ РАБОТЫ С ПАМЯТЬЮ
@@ -84,23 +84,26 @@ char* ScanInternal(const char* pattern, int patternLen, const char* begin, intpt
     return match;
 }
 
-//▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+// ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 //                              ОБЪЯВЛЕНИЯ ДЛЯ D3D ХУКОВ
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 typedef long(__stdcall* tPresent)(LPDIRECT3DDEVICE9, RECT*, RECT*, HWND, RGNDATA*);
-tPresent oD3D9Present = NULL;
+tPresent oD3D9Present = nullptr;
 
 long __stdcall hkD3D9Present(LPDIRECT3DDEVICE9 pDevice, RECT* pSourceRect, RECT* pDestRect, HWND hDestWindowOverride, RGNDATA* pDirtyRegion) {
-    long present = oD3D9Present(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
     if (FPSTarget > 0) {
         auto now = std::chrono::steady_clock::now();
         auto frameTime = std::chrono::duration_cast<std::chrono::nanoseconds>(now - lastFrameTime).count();
+
         if (frameTime < FPSTarget) {
-            std::this_thread::sleep_for(std::chrono::nanoseconds(FPSTarget - frameTime));
+            auto targetTime = lastFrameTime + std::chrono::nanoseconds(FPSTarget);
+            while (std::chrono::steady_clock::now() < targetTime) {
+                std::this_thread::yield();
+            }
         }
         lastFrameTime = now;
     }
-    return present;
+    return oD3D9Present(pDevice, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
 }
 
 //▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
@@ -140,31 +143,17 @@ void MemoryScanThread() {
     }
 }
 
-void FPSControlThread() {
-    while (!bExit) {
-        if (FPSTarget > 0) {
-            auto now = std::chrono::steady_clock::now();
-            auto frameTime = std::chrono::duration_cast<std::chrono::nanoseconds>(now - lastFrameTime).count();
-            if (frameTime < FPSTarget) {
-                std::this_thread::sleep_for(std::chrono::nanoseconds(FPSTarget - frameTime));
-            }
-            lastFrameTime = now;
-        }
-        std::this_thread::yield();
-    }
-}
-
 //▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 //                              ОСНОВНОЙ КОД
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 DWORD WINAPI MainThread(LPVOID param) {
-    // Проверка, что процесс — TS3.exe или Sims3Launcher.exe
+    // Проверка, что процесс — TS3.exe
     wchar_t modName[MAX_PATH];
     GetModuleFileNameW(NULL, modName, MAX_PATH);
     std::wstring exePath(modName);
     std::transform(exePath.begin(), exePath.end(), exePath.begin(), towlower);
 
-    if (exePath.find(L"ts3") == std::wstring::npos && exePath.find(L"sims3launcher") == std::wstring::npos) {
+    if (exePath.find(L"ts3") == std::wstring::npos) {
         FreeLibraryAndExitThread((HMODULE)param, 0);
         return 0;
     }
@@ -217,8 +206,8 @@ DWORD WINAPI MainThread(LPVOID param) {
     }
 
     std::thread memoryThread(MemoryScanThread);
-    std::thread fpsThread(FPSControlThread);
 
+    // Borderless режим
     if (borderless) {
         HWND hWnd = nullptr;
         while (!hWnd && !bExit) {
@@ -249,7 +238,6 @@ DWORD WINAPI MainThread(LPVOID param) {
 
     // Очистка
     memoryThread.join();
-    fpsThread.join();
     FreeLibraryAndExitThread((HMODULE)param, 0);
     return 0;
 }
