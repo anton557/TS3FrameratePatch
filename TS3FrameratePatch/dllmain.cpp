@@ -21,7 +21,6 @@
 #include <algorithm>
 #include <thread>
 #include <atomic>
-#include <windows.h>.
 
 #pragma comment(lib, "D3D Hook x86.lib")
 
